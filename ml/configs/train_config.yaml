@@ -1,0 +1,94 @@
+# ──────────────────────────────────────────────
+# Keramorph – Training Configuration
+# ──────────────────────────────────────────────
+
+# ─── Data ────────────────────────────────────
+data:
+  raw_dir: ml/data/raw
+  processed_dir: ml/data/processed
+  normalized_dir: ml/data/normalized
+  split_seed: 42
+  val_ratio: 0.15
+  test_ratio: 0.15
+
+# ─── Preprocessing / Feature Extraction ──────
+preprocessing:
+  target_size: [224, 224]             # resize for CNN
+  contour_method: canny               # canny | threshold | adaptive
+  canny_low: 50
+  canny_high: 150
+  morph_kernel: 5                     # morphological cleanup kernel size
+  morph_iterations: 2
+  align: true                         # center + orient contour
+  normalize_intensity: true
+  fourier_descriptors: 64             # num Fourier coefficients
+  hu_moments: true
+
+# ─── Augmentation ────────────────────────────
+augmentation:
+  enabled: true
+  flip_horizontal: true
+  rotation_range: 15                  # degrees
+  scale_range: [0.9, 1.1]
+  noise_std: 0.02
+  brightness_range: [0.8, 1.2]
+
+# ─── Models ──────────────────────────────────
+models:
+  baseline_knn:
+    type: knn
+    n_neighbors: 5
+    metric: euclidean
+    features: [fourier, hu_moments]   # descriptors
+
+  baseline_xgb:
+    type: xgboost
+    n_estimators: 300
+    max_depth: 6
+    learning_rate: 0.1
+    features: [fourier, hu_moments, aspect_ratio, solidity]
+
+  prod_cnn:
+    type: cnn
+    architecture: efficientnet_b0     # efficientnet_b0 | mobilenet_v3_small
+    pretrained: true
+    freeze_backbone_epochs: 5
+    input_channels: 1                 # grayscale / binary contour
+    num_classes: null                  # auto from dataset
+    epochs: 50
+    batch_size: 32
+    learning_rate: 0.001
+    scheduler: cosine
+    weight_decay: 0.0001
+    early_stopping_patience: 7
+    label_smoothing: 0.1
+
+  siamese:
+    type: siamese
+    architecture: efficientnet_b0
+    embedding_dim: 128
+    margin: 1.0
+    mining_strategy: hard
+    epochs: 60
+    batch_size: 32
+    learning_rate: 0.0005
+
+# ─── Evaluation ──────────────────────────────
+evaluation:
+  top_k: [1, 3, 5]
+  calibration: true
+  confusion_matrix: true
+  per_class_report: true
+  failure_examples: 20                # num worst-predicted to log
+  export_predictions: true
+
+# ─── MLflow ──────────────────────────────────
+mlflow:
+  experiment_name: keramorph
+  tracking_uri: ${MLFLOW_TRACKING_URI:-http://localhost:5000}
+  log_models: true
+  log_artifacts: true
+
+# ─── Reproducibility ────────────────────────
+seed: 42
+deterministic: true

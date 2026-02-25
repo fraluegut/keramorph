@@ -1,0 +1,26 @@
+# Caddyfile for keramorph frontend
+:80 {
+    root * /usr/share/caddy
+
+    # SPA fallback
+    try_files {path} /index.html
+
+    # Proxy API
+    handle /predict* {
+        reverse_proxy api:8000
+    }
+    handle /feedback* {
+        reverse_proxy api:8000
+    }
+    handle /healthz {
+        reverse_proxy api:8000
+    }
+    handle /readyz {
+        reverse_proxy api:8000
+    }
+    handle /model {
+        reverse_proxy api:8000
+    }
+
+    file_server
+}

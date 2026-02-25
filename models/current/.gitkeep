@@ -1,0 +1,6 @@
+# Model artifacts directory
+# Place trained model files here:
+# - best_cnn.pt        (CNN weights)
+# - label_map.json     (class → index mapping)
+# - model_knn.pkl      (k-NN baseline)
+# - model_xgboost.pkl  (XGBoost baseline)

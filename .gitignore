@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ML artifacts
+*.h5
+*.hdf5
+*.onnx
+*.pt
+*.pth
+*.pkl
+*.joblib
+mlruns/
+mlartifacts/
+
+# DVC
+/ml/data/raw/
+/ml/data/processed/
+/ml/data/normalized/
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+
+# Docker
+docker-compose.override.yml
+
+# Secrets
+.env
+*.pem
+*.key
+
+# Logs
+logs/
+*.log
+
+# Coverage / Tests
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# MinIO data
+minio_data/
+
+# Postgres data
+postgres_data/
