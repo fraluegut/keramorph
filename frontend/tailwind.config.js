@@ -18,6 +18,20 @@ export default {
           950: "#3a1b0e",
         },
       },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+      },
+      animation: {
+        'float': 'float 6s ease-in-out infinite',
+        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+      },
+      backdropBlur: {
+        xs: '2px',
+      },
+      boxShadow: {
+        'ceramic': '0 0 20px rgba(198, 108, 34, 0.15), 0 0 40px rgba(198, 108, 34, 0.1)',
+        'ceramic-lg': '0 0 30px rgba(198, 108, 34, 0.2), 0 0 60px rgba(198, 108, 34, 0.15)',
+      },
     },
   },
   plugins: [],
