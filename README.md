@@ -1,241 +1,146 @@
 # Keramorph
 
-**Sistema ML de clasificación de perfiles cerámicos** — identifica tipos cerámicos a partir de imágenes de silueta/contorno usando Computer Vision clásica + Deep Learning.
+**Machine-learning classification of archaeological ceramic profiles.**
 
-> Proyecto desarrollado por **ArqueoBytes**.
+Keramorph identifies ceramic types from profile (silhouette/contour) drawings by combining classical computer vision with deep learning. Upload one or several profile images and get ranked predictions, a visual explanation and image-quality warnings.
+
+Built by [Javier Luengo](https://javierluengo.es) for **ArqueoBytes**. Status: **v0.1.0, early stage** — the architecture and pipeline are in place; models and datasets are still evolving.
 
 ---
 
-## Visión general
+## What you get
 
-Sube 1 o varias imágenes de un perfil cerámico y obtén:
+- **Top-K predictions** (e.g. *Form 14 / Type X*) with probabilities.
+- **Visual explanation** — contour overlay, normalised input and CNN heatmap.
+- **Quality alerts** — poor image, incomplete profile, odd perspective.
+- **Metadata** — model version, dataset, latency.
 
-- **Top-K predicciones** (p. ej. "Forma X / Tipo Y") con probabilidad/confianza
-- **Explicación visual**: overlay del contorno, imagen normalizada, heatmap (CNN)
-- **Alertas de calidad**: "imagen mala / perfil incompleto / perspectiva rara"
-- **Metadatos**: versión del modelo, fecha, dataset, latencia
-
-## Arquitectura
+## Architecture
 
 ```
-┌─────────────┐     ┌──────────────┐     ┌───────────────────┐
-│   Frontend   │────▶│  FastAPI API  │────▶│  Inference Engine  │
-│  React+Vite  │◀────│  /predict     │◀────│  CNN / kNN / XGB   │
-│  Tailwind    │     │  /feedback    │     │  contour + feats   │
-└─────────────┘     │  /healthz     │     └───────────────────┘
-                    │  /model       │              │
-                    └──────────────┘              │
-                           │               ┌──────▼──────┐
-                           │               │   MLflow     │
-                           └──────────────▶│   Registry   │
-                                           └─────────────┘
+┌────────────┐     ┌─────────────┐     ┌──────────────────┐
+│  Frontend  │────▶│ FastAPI API │────▶│ Inference engine │
+│ React+Vite │◀────│  /predict   │◀────│ CNN / kNN / XGB  │
+│  Tailwind  │     │  /feedback  │     │ contour+features │
+└────────────┘     │  /healthz   │     └──────────────────┘
+                   │  /model     │              │
+                   └─────────────┘       ┌──────▼──────┐
+                          └─────────────▶│   MLflow    │
+                                         │  registry   │
+                                         └─────────────┘
 ```
 
-### 3 capas
+| Layer | Tech | Responsibility |
+|---|---|---|
+| Frontend | React 18, Vite, Tailwind | Upload, results, advanced mode |
+| Backend | FastAPI, Pydantic v2 | REST API, validation, logging |
+| ML / MLOps | PyTorch, timm, scikit-learn, MLflow, DVC | data → train → evaluate → deploy |
 
-| Capa | Tech | Responsabilidad |
-|------|------|-----------------|
-| **Frontend** | React 18, Vite, Tailwind | Upload, visualización resultados, modo avanzado |
-| **Backend** | FastAPI, Pydantic v2 | REST API, validación, logging, tracing |
-| **ML/MLOps** | PyTorch, timm, scikit-learn, MLflow, DVC | Pipelines data→train→eval→deploy |
+## Two-stage ML approach
 
-## Enfoque ML (2 etapas)
+**Stage 1 — profile normalisation (classical CV)**
 
-### Etapa 1 — Normalización del perfil (CV clásica)
+- Contour detection (Canny / threshold / adaptive)
+- Morphological clean-up and smoothing
+- Alignment of centre, scale and orientation
+- Representations: normalised binary image (for the CNN), Fourier descriptors, Hu moments and geometric features (for baselines)
 
-- Detección contorno (Canny / threshold / adaptive)
-- Limpieza morfológica + suavizado
-- Alineación (centro, escala, orientación)
-- Extracción de representaciones:
-  - Imagen binaria normalizada → para CNN
-  - Descriptores de Fourier → para baselines
-  - Hu moments + features geométricas → para baselines
+**Stage 2 — classifier**
 
-### Etapa 2 — Clasificador
+| Model | Role | Input |
+|---|---|---|
+| k-NN | Interpretable baseline | Fourier + Hu + geometry |
+| XGBoost | Strong baseline | Fourier + Hu + geometry |
+| EfficientNet-B0 | Production model | Normalised 224×224 image |
+| Siamese network | Optional metric learning | Similarity embeddings |
 
-| Modelo | Tipo | Features |
-|--------|------|----------|
-| **k-NN** | Baseline interpretable | Fourier + Hu + geom |
-| **XGBoost** | Baseline potente | Fourier + Hu + geom |
-| **EfficientNet-B0** | Producción | Imagen normalizada 224×224 |
-| **Siamese** (opcional) | Metric learning | Embeddings de similitud |
-
-## Estructura del proyecto
+## Project structure
 
 ```
 keramorph/
-├── frontend/                 # React + Vite + Tailwind
-│   ├── src/
-│   │   ├── components/       # Header, ImageUploader, ResultCard, AdvancedPanel
-│   │   ├── App.tsx
-│   │   ├── api.ts
-│   │   └── types.ts
-│   └── package.json
+├── frontend/            # React + Vite + Tailwind
 ├── services/
-│   ├── api/                  # FastAPI (main, schemas, config, observability)
-│   └── inference/            # ModelRuntime (carga modelo, predict, artefactos)
+│   ├── api/             # FastAPI (main, schemas, config, observability)
+│   └── inference/       # Model runtime
 ├── ml/
-│   ├── data/                 # Pipeline datos + DVC
-│   ├── features/             # Extracción contorno, descriptores, calidad
-│   ├── training/             # Train baselines + CNN
-│   ├── evaluation/           # Métricas, confusión, reportes
-│   └── configs/              # train_config.yaml
-├── tests/                    # pytest (features, API, data pipeline)
-├── infra/
-│   ├── docker/               # Dockerfile.api, Dockerfile.frontend, Caddyfile
-│   └── compose/              # docker-compose.yml (API + MLflow + Postgres + MinIO + Redis)
-├── .github/workflows/ci.yml  # GitHub Actions CI/CD
-├── Makefile                  # Targets: data, train, eval, docker, deploy, test, lint
-├── pyproject.toml
-└── .env.example
+│   ├── data/            # Data pipeline + DVC
+│   ├── features/        # Contours, descriptors, quality checks
+│   ├── training/        # Baselines and CNN
+│   ├── evaluation/      # Metrics, confusion matrices, reports
+│   └── configs/         # train_config.yaml
+├── tests/               # pytest
+├── infra/               # Dockerfiles and Compose (API, MLflow, Postgres, MinIO, Redis)
+├── docs/                # Architecture notes
+├── .github/workflows/   # CI
+├── Makefile
+└── pyproject.toml
 ```
 
 ## Quickstart
 
-### Requisitos previos
-
-- Python ≥ 3.10
-- Node.js ≥ 20
-- Docker + Docker Compose (para stack completo)
-
-### 1. Clonar e instalar
+Requirements: Python ≥ 3.10, Node.js ≥ 20, Docker + Compose (for the full stack).
 
 ```bash
-git clone https://github.com/arqueobytes/keramorph.git
+git clone https://github.com/fraluegut/keramorph.git
 cd keramorph
 
-# Python
 python -m venv .venv && source .venv/bin/activate
 make install
-
-# Frontend
 cd frontend && npm ci && cd ..
-```
 
-### 2. Levantar infraestructura local
-
-```bash
 cp .env.example .env
-make compose-up    # Postgres + MLflow + MinIO + Redis
+make compose-up      # Postgres, MLflow, MinIO, Redis
 ```
 
-### 3. Preparar datos
-
-Coloca imágenes en `ml/data/raw/<nombre_tipo>/*.png` y ejecuta:
+Put images in `ml/data/raw/<type_name>/*.png`, then:
 
 ```bash
-make data          # procesar + generar splits
-```
-
-### 4. Entrenar
-
-```bash
-make train         # k-NN + XGBoost + CNN
-```
-
-Monitorea en MLflow: http://localhost:5000
-
-### 5. Evaluar
-
-```bash
+make data            # process and split
+make train           # k-NN + XGBoost + CNN
 make eval
+make api             # FastAPI on :8000
+make front           # Vite dev server on :5173
 ```
 
-### 6. Servir
+MLflow runs at http://localhost:5000 and the app at http://localhost:5173.
 
-```bash
-# En terminales separadas:
-make api           # FastAPI en :8000
-make front         # Vite dev server en :5173
-```
+## API
 
-Abre http://localhost:5173 → sube imágenes → identifica.
-
-## API Endpoints
-
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| `POST` | `/predict` | Clasificar imágenes (multipart/form-data) |
-| `POST` | `/feedback` | Corrección del usuario |
-| `GET` | `/healthz` | Liveness check |
-| `GET` | `/readyz` | Readiness (modelo cargado) |
-| `GET` | `/model` | Metadata del modelo |
-
-### Ejemplo `POST /predict`
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/predict` | Classify images (multipart/form-data) |
+| `POST` | `/feedback` | Submit a user correction |
+| `GET` | `/healthz` | Liveness |
+| `GET` | `/readyz` | Readiness (model loaded) |
+| `GET` | `/model` | Model metadata |
 
 ```bash
 curl -X POST http://localhost:8000/predict \
-  -F "files=@perfil1.png" \
-  -F "files=@perfil2.png"
+  -F "files=@profile1.png" -F "files=@profile2.png"
 ```
-
-Respuesta:
 
 ```json
 {
-  "results": [
-    {
-      "predictions": [
-        {"label": "Forma_14", "probability": 0.87, "rank": 1},
-        {"label": "Forma_7",  "probability": 0.06, "rank": 2}
-      ],
-      "quality": {"score": 0.95, "warnings": [], "ok": true},
-      "artifacts": {
-        "overlay_contour": "iVBORw0KGgo...",
-        "normalized_input": "iVBORw0KGgo..."
-      },
-      "model_info": {"type": "cnn", "version": "0.1.0", "path": "models/current"},
-      "latency_ms": 42.3
-    }
-  ]
+  "results": [{
+    "predictions": [
+      {"label": "Form_14", "probability": 0.87, "rank": 1},
+      {"label": "Form_7",  "probability": 0.06, "rank": 2}
+    ],
+    "quality": {"score": 0.95, "warnings": [], "ok": true},
+    "artifacts": {"overlay_contour": "<base64>", "normalized_input": "<base64>"},
+    "model_info": {"type": "cnn", "version": "0.1.0"},
+    "latency_ms": 42.3
+  }]
 }
 ```
 
-## Observabilidad
+## MLOps and quality
 
-- **Logs** estructurados (JSON) con `structlog` — `request_id`, `model_version`, `latency_ms`
-- **Métricas** p50/p95 latencia, error rate, throughput
-- **Trazas** OpenTelemetry (preparado)
-- **Data drift** monitor básico: distribución tamaños, brillo, ratio contorno/imagen
+- Structured JSON logs (`structlog`) with request ID, model version and latency.
+- Everything tracked in MLflow: parameters, metrics (accuracy, macro-F1, top-k), confusion matrices, dataset and code versions.
+- Data versioning with DVC; CI with GitHub Actions.
+- Tests and checks: `make test`, `make test-cov`, `make lint` (ruff), `make typecheck` (mypy).
 
-## MLOps Pipeline
-
-```
-make data → make train → make eval → make package → make docker → make deploy
-```
-
-Todo queda registrado en **MLflow**:
-- `params`: arquitectura, augmentations, seed
-- `metrics`: accuracy, F1 macro, top-k, calibración
-- `artifacts`: matriz confusión, ejemplos fallidos, PR curves
-- `dataset_version` + `code_version` (commit hash)
-
-## Testing
-
-```bash
-make test          # unit tests
-make test-cov      # con coverage
-make lint          # ruff
-make typecheck     # mypy
-```
-
-## Despliegue
-
-```bash
-make docker        # build imagen API
-make docker-front  # build imagen frontend
-make deploy        # push + deploy staging
-```
-
-**Estrategia**:
-- Staging siempre antes de producción
-- Rollout canary (manual inicialmente)
-- Fallback al modelo anterior si sube error/latencia
-
-## Licencia
+## License
 
 MIT
-
----
-
-*Keramorph v0.1.0 — ArqueoBytes*
