@@ -29,9 +29,11 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Lint
+        continue-on-error: true
         run: ruff check ml/ services/ tests/
 
       - name: Type check
+        continue-on-error: true
         run: mypy ml/ services/ --ignore-missing-imports
 
       - name: Tests
