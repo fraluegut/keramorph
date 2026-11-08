@@ -81,11 +81,24 @@ class ModelRuntime:
         self._loaded = False
 
     def load(self) -> None:
-        """Load model and label map from disk."""
-        # label map
-        lm_path = self.model_path / "label_map.json" if not self.model_path.suffix else self.model_path.parent / "label_map.json"
-        if lm_path and Path(lm_path).exists():
-            self.label_map = json.loads(Path(lm_path).read_text())
+        """Load model and label map from disk.
+
+        Raises ``FileNotFoundError`` if the label map or the model file is
+        missing: a runtime without a trained model must never look ready, or
+        it would return meaningless predictions.
+        """
+        lm_path = (
+            self.model_path / "label_map.json"
+            if not self.model_path.suffix
+            else self.model_path.parent / "label_map.json"
+        )
+        if not lm_path.exists():
+            raise FileNotFoundError(
+                f"Label map not found: {lm_path}. Train a model first (make train)."
+            )
+        self.label_map = json.loads(lm_path.read_text())
+        if not self.label_map:
+            raise ValueError(f"Label map is empty: {lm_path}")
         self.inv_label_map = {v: k for k, v in self.label_map.items()}
 
         if self.model_type == "cnn":
@@ -99,17 +112,22 @@ class ModelRuntime:
         logger.info("model_loaded", type=self.model_type, path=str(self.model_path))
 
     def _load_cnn(self) -> None:
+        weights_path = self.model_path / "best_cnn.pt" if self.model_path.is_dir() else self.model_path
+        if not weights_path.exists():
+            # Checked before importing torch: fail fast and never fall back to
+            # randomly initialised weights.
+            raise FileNotFoundError(
+                f"Model weights not found: {weights_path}. Train a model first (make train)."
+            )
+
         import torch
         import timm
 
-        num_classes = len(self.label_map) or 10  # fallback
         self.model = timm.create_model(
-            "efficientnet_b0", pretrained=False, in_chans=1, num_classes=num_classes
+            "efficientnet_b0", pretrained=False, in_chans=1, num_classes=len(self.label_map)
         )
-        weights_path = self.model_path / "best_cnn.pt" if self.model_path.is_dir() else self.model_path
-        if weights_path.exists():
-            state = torch.load(str(weights_path), map_location=self.device, weights_only=True)
-            self.model.load_state_dict(state)
+        state = torch.load(str(weights_path), map_location=self.device, weights_only=True)
+        self.model.load_state_dict(state)
         self.model.eval()
         self.model.to(self.device)
 

@@ -60,8 +60,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
         _runtime.load()
     except Exception as exc:
-        logger.warning("model_load_failed", error=str(exc))
-        # API starts but /readyz will return 503
+        logger.error("model_load_failed", error=str(exc))
+        # The API still starts, but /readyz and /predict answer 503 until a model exists.
 
     yield  # app running
 
