@@ -4,16 +4,20 @@
 
 Keramorph identifies ceramic types from profile (silhouette/contour) drawings by combining classical computer vision with deep learning. Upload one or several profile images and get ranked predictions, a visual explanation and image-quality warnings.
 
-Built by [Javier Luengo](https://javierluengo.es) for **ArqueoBytes**. Status: **v0.1.0, early stage** — the architecture and pipeline are in place; models and datasets are still evolving.
+Built by [Javier Luengo](https://javierluengo.es) for **ArqueoBytes**.
+
+> **Status: v0.1.0, early scaffold.** The pipeline code exists (contour extraction, shape descriptors, training and evaluation scripts, API, frontend), but **there is no dataset and no trained model in this repository**.
+> - Until you train a model, the API starts but `/readyz` and `/predict` answer **503**. It never falls back to untrained weights.
+> - The **demo mode of the frontend is mock data**: a fixed, hand-written result for one sample piece. It is not a real prediction.
 
 ---
 
-## What you get
+## What it does (once a model is trained)
 
 - **Top-K predictions** (e.g. *Form 14 / Type X*) with probabilities.
-- **Visual explanation** — contour overlay, normalised input and CNN heatmap.
-- **Quality alerts** — poor image, incomplete profile, odd perspective.
-- **Metadata** — model version, dataset, latency.
+- **Visual explanation**: contour overlay and normalised input image.
+- **Quality alerts**: image too small, low contrast, no contour found, contour too small or filling the whole image, extreme aspect ratio.
+- **Metadata**: model type, model version and latency.
 
 ## Architecture
 
@@ -52,7 +56,7 @@ Built by [Javier Luengo](https://javierluengo.es) for **ArqueoBytes**. Status: *
 | k-NN | Interpretable baseline | Fourier + Hu + geometry |
 | XGBoost | Strong baseline | Fourier + Hu + geometry |
 | EfficientNet-B0 | Production model | Normalised 224×224 image |
-| Siamese network | Optional metric learning | Similarity embeddings |
+| Siamese network | Planned, not implemented | Similarity embeddings |
 
 ## Project structure
 
@@ -92,7 +96,7 @@ cp .env.example .env
 make compose-up      # Postgres, MLflow, MinIO, Redis
 ```
 
-Put images in `ml/data/raw/<type_name>/*.png`, then:
+You must provide the data: put your own labelled profile images in `ml/data/raw/<type_name>/*.png` (one folder per type), then:
 
 ```bash
 make data            # process and split
@@ -109,9 +113,9 @@ MLflow runs at http://localhost:5000 and the app at http://localhost:5173.
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/predict` | Classify images (multipart/form-data) |
-| `POST` | `/feedback` | Submit a user correction |
+| `POST` | `/feedback` | Submit a user correction (currently only logged, not stored) |
 | `GET` | `/healthz` | Liveness |
-| `GET` | `/readyz` | Readiness (model loaded) |
+| `GET` | `/readyz` | Readiness (200 only when a model is loaded, otherwise 503) |
 | `GET` | `/model` | Model metadata |
 
 ```bash
@@ -137,8 +141,8 @@ curl -X POST http://localhost:8000/predict \
 ## MLOps and quality
 
 - Structured JSON logs (`structlog`) with request ID, model version and latency.
-- Everything tracked in MLflow: parameters, metrics (accuracy, macro-F1, top-k), confusion matrices, dataset and code versions.
-- Data versioning with DVC; CI with GitHub Actions.
+- Training and evaluation runs are tracked in MLflow: parameters, validation and test metrics (accuracy, top-k), the logged models and a text confusion matrix. A dataset hash is computed by the data pipeline but not yet logged to MLflow.
+- DVC is configured (MinIO remote for local development) but no data is tracked yet. CI runs on GitHub Actions.
 - Tests and checks: `make test`, `make test-cov`, `make lint` (ruff), `make typecheck` (mypy).
 
 ## License
